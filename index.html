@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garden Solar Shade Planner</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+canvas { display: block; }
+
+#ui {
+  position: absolute; top: 16px; left: 16px;
+  background: rgba(20, 20, 40, 0.92);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  padding: 20px;
+  color: #e0e0e0;
+  width: 300px;
+  font-size: 13px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+#ui h2 { font-size: 16px; margin-bottom: 12px; color: #fff; font-weight: 600; }
+#ui h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin: 16px 0 8px; }
+
+.control-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.control-row label { flex: 0 0 90px; color: #aaa; }
+.control-row input[type="range"] { flex: 1; margin: 0 8px; accent-color: #f0a030; }
+.control-row .val { flex: 0 0 55px; text-align: right; font-variant-numeric: tabular-nums; color: #f0a030; }
+
+.sun-info {
+  background: rgba(240, 160, 48, 0.12);
+  border: 1px solid rgba(240, 160, 48, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.sun-info .below { color: #e06060; }
+
+button {
+  background: rgba(240, 160, 48, 0.2);
+  border: 1px solid rgba(240, 160, 48, 0.4);
+  color: #f0a030;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+button:hover { background: rgba(240, 160, 48, 0.35); }
+button.active { background: rgba(240, 160, 48, 0.5); border-color: #f0a030; }
+
+.btn-row { display: flex; gap: 8px; margin: 8px 0; }
+
+#info-bar {
+  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+  background: rgba(20, 20, 40, 0.85);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 10px 20px;
+  color: #aaa;
+  font-size: 12px;
+  text-align: center;
+}
+
+#loading {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: rgba(20, 20, 40, 0.95);
+  border-radius: 16px;
+  padding: 40px 60px;
+  color: #fff;
+  font-size: 18px;
+  text-align: center;
+}
+#loading .spinner {
+  width: 40px; height: 40px;
+  border: 3px solid rgba(240,160,48,0.2);
+  border-top-color: #f0a030;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+select {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #e0e0e0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  Loading garden scan...
+</div>
+
+<div id="ui" style="display:none">
+  <h2>&#9728; Garden Shade Planner</h2>
+  <div style="font-size:11px;color:#888;margin-bottom:12px">Forest Hill, SE London &middot; 51.44&deg;N</div>
+
+  <h3>Time</h3>
+  <div class="control-row">
+    <label>Time</label>
+    <input type="range" id="timeSlider" min="6" max="21" step="0.1" value="12">
+    <span class="val" id="timeVal">12:00</span>
+  </div>
+  <div class="control-row">
+    <label>Month</label>
+    <select id="monthSelect">
+      <option value="5">May</option>
+      <option value="6" selected>June</option>
+      <option value="7">July</option>
+      <option value="8">August</option>
+      <option value="9">September</option>
+    </select>
+  </div>
+  <div class="btn-row">
+    <button id="animateBtn">&#9654; Animate Day</button>
+    <button id="resetTimeBtn">Noon</button>
+  </div>
+
+  <div class="sun-info" id="sunInfo">
+    Sun altitude: --&deg; &middot; Azimuth: --&deg;
+  </div>
+
+  <h3>Parasol (IKEA Seglar&ouml;)</h3>
+  <div style="font-size:11px;color:#888;margin-bottom:8px">3.3m &times; 2.4m cantilever &middot; drag to move</div>
+  <div class="control-row">
+    <label>Rotation</label>
+    <input type="range" id="rotSlider" min="0" max="360" step="1" value="0">
+    <span class="val" id="rotVal">0&deg;</span>
+  </div>
+  <div class="control-row">
+    <label>Tilt</label>
+    <input type="range" id="tiltSlider" min="0" max="45" step="1" value="0">
+    <span class="val" id="tiltVal">0&deg;</span>
+  </div>
+  <div class="btn-row">
+    <button id="toggleParasol">Hide Parasol</button>
+  </div>
+
+  <h3>View</h3>
+  <div class="btn-row">
+    <button id="viewTop">Top</button>
+    <button id="viewSide">Side</button>
+    <button id="viewReset">Reset</button>
+  </div>
+  <div class="control-row">
+    <label>Shadows</label>
+    <input type="range" id="shadowRes" min="1" max="4" step="1" value="2">
+    <span class="val" id="shadowResVal">2K</span>
+  </div>
+</div>
+
+<div id="info-bar">
+  Click &amp; drag parasol to reposition &middot; R to rotate 15&deg; &middot; Scroll to zoom &middot; Right-drag to pan
+</div>
+
+<!-- Three.js r128 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+// ============================================================
+// OBJLoader (inline, from Three.js r128 examples)
+// ============================================================
+THREE.OBJLoader = (function () {
+  function OBJLoader(manager) {
+    THREE.Loader.call(this, manager);
+    this.materials = null;
+  }
+  OBJLoader.prototype = Object.assign(Object.create(THREE.Loader.prototype), {
+    constructor: OBJLoader,
+    setMaterials: function(materials) { this.materials = materials; return this; },
+    load: function(url, onLoad, onProgress, onError) {
+      var scope = this;
+      var loader = new THREE.FileLoader(this.manager);
+      loader.setPath(this.path);
+      loader.setRequestHeader(this.requestHeader);
+      loader.setWithCredentials(this.withCredentials);
+      loader.load(url, function(text) {
+        try { onLoad(scope.parse(text)); }
+        catch(e) { if(onError) onError(e); else console.error(e); scope.manager.itemError(url); }
+      }, onProgress, onError);
+    },
+    parse: function(text) {
+      var object = new THREE.Group();
+      var geometry, material, mesh;
+      var vertices = [], normals = [], uvs = [];
+      var gVerts = [], gNorms = [], gUVs = [], gIndices = [];
+
+      function addMesh() {
+        if (gVerts.length === 0) return;
+        var bufGeo = new THREE.BufferGeometry();
+        bufGeo.setAttribute('position', new THREE.Float32BufferAttribute(gVerts, 3));
+        if (gNorms.length > 0) bufGeo.setAttribute('normal', new THREE.Float32BufferAttribute(gNorms, 3));
+        if (gUVs.length > 0) bufGeo.setAttribute('uv', new THREE.Float32BufferAttribute(gUVs, 2));
+        if (gNorms.length === 0) bufGeo.computeVertexNormals();
+        var mat = material || new THREE.MeshPhongMaterial({ color: 0xcccccc });
+        mesh = new THREE.Mesh(bufGeo, mat);
+        object.add(mesh);
+        gVerts = []; gNorms = []; gUVs = [];
+      }
+
+      var lines = text.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (line.length === 0 || line.charAt(0) === '#') continue;
+        var parts = line.split(/\s+/);
+        var key = parts[0];
+
+        if (key === 'v') {
+          vertices.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]));
+        } else if (key === 'vn') {
+          normals.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]));
+        } else if (key === 'vt') {
+          uvs.push(parseFloat(parts[1]), parseFloat(parts[2]));
+        } else if (key === 'usemtl') {
+          addMesh();
+          if (this.materials) {
+            material = this.materials.create(parts[1]);
+          }
+        } else if (key === 'f') {
+          // Triangulate fan-style
+          for (var j = 2; j < parts.length - 1; j++) {
+            var faceVerts = [parts[1], parts[j], parts[j+1]];
+            for (var k = 0; k < 3; k++) {
+              var indices = faceVerts[k].split('/');
+              var vi = (parseInt(indices[0]) - 1) * 3;
+              gVerts.push(vertices[vi], vertices[vi+1], vertices[vi+2]);
+              if (indices[1] && indices[1] !== '') {
+                var ti = (parseInt(indices[1]) - 1) * 2;
+                gUVs.push(uvs[ti], uvs[ti+1]);
+              }
+              if (indices[2]) {
+                var ni = (parseInt(indices[2]) - 1) * 3;
+                gNorms.push(normals[ni], normals[ni+1], normals[ni+2]);
+              }
+            }
+          }
+        }
+      }
+      addMesh();
+      return object;
+    }
+  });
+  return OBJLoader;
+})();
+
+// ============================================================
+// Solar position calculations
+// ============================================================
+function solarPosition(lat, lon, month, day, hour) {
+  // day of year
+  var daysInMonth = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+  var N = daysInMonth[month - 1] + day;
+
+  // Solar declination (Spencer, 1971)
+  var B = (360 / 365) * (N - 81) * Math.PI / 180;
+  var declination = 23.45 * Math.sin(B);
+  var decRad = declination * Math.PI / 180;
+
+  // Equation of time (minutes)
+  var EoT = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+
+  // Time correction factor (minutes)
+  var LSTM = 0; // London standard meridian
+  var TC = 4 * (lon - LSTM) + EoT;
+
+  // Local solar time
+  var LST = hour + TC / 60;
+
+  // Hour angle (degrees)
+  var HRA = 15 * (LST - 12);
+  var hraRad = HRA * Math.PI / 180;
+
+  var latRad = lat * Math.PI / 180;
+
+  // Solar altitude
+  var sinAlt = Math.sin(latRad) * Math.sin(decRad) +
+               Math.cos(latRad) * Math.cos(decRad) * Math.cos(hraRad);
+  var altitude = Math.asin(sinAlt) * 180 / Math.PI;
+
+  // Solar azimuth
+  var cosAz = (Math.sin(decRad) - Math.sin(latRad) * sinAlt) /
+              (Math.cos(latRad) * Math.cos(altitude * Math.PI / 180));
+  cosAz = Math.max(-1, Math.min(1, cosAz));
+  var azimuth = Math.acos(cosAz) * 180 / Math.PI;
+  if (HRA > 0) azimuth = 360 - azimuth;
+
+  return { altitude: altitude, azimuth: azimuth, declination: declination };
+}
+
+// ============================================================
+// Main application
+// ============================================================
+var scene, camera, renderer, controls;
+var sunLight, ambientLight;
+var parasolGroup, canopyMesh, poleMesh;
+var gardenModel;
+var raycaster, mouse, dragPlane;
+var isDragging = false, isAnimating = false, animationId;
+
+// Config
+var LAT = 51.44, LON = -0.05;
+var PARASOL_W = 3.3, PARASOL_D = 2.4, PARASOL_H = 2.5;
+var OFFSET = 1.2; // cantilever offset from pole
+
+init();
+
+function init() {
+  // Scene
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87CEEB);
+  scene.fog = new THREE.FogExp2(0x87CEEB, 0.03);
+
+  // Camera
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(8, 8, 8);
+
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  document.body.appendChild(renderer.domElement);
+
+  // Orbit Controls (inline minimal implementation)
+  setupOrbitControls();
+
+  // Lights
+  ambientLight = new THREE.AmbientLight(0x8090b0, 0.5);
+  scene.add(ambientLight);
+
+  // Hemisphere light for sky/ground
+  var hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x556633, 0.3);
+  scene.add(hemiLight);
+
+  sunLight = new THREE.DirectionalLight(0xfffde8, 1.2);
+  sunLight.castShadow = true;
+  sunLight.shadow.mapSize.width = 2048;
+  sunLight.shadow.mapSize.height = 2048;
+  sunLight.shadow.camera.near = 0.1;
+  sunLight.shadow.camera.far = 30;
+  sunLight.shadow.camera.left = -10;
+  sunLight.shadow.camera.right = 10;
+  sunLight.shadow.camera.top = 10;
+  sunLight.shadow.camera.bottom = -10;
+  sunLight.shadow.bias = -0.001;
+  sunLight.shadow.normalBias = 0.02;
+  scene.add(sunLight);
+  scene.add(sunLight.target);
+
+  // Ground plane for shadow catching (larger than model)
+  // Scan Y range is ~-0.4 to 3.5, ground level is approx Y=-0.4
+  var groundGeo = new THREE.PlaneGeometry(30, 30);
+  var groundMat = new THREE.ShadowMaterial({ opacity: 0.35 });
+  var ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.41;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Drag
+  raycaster = new THREE.Raycaster();
+  mouse = new THREE.Vector2();
+  dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+  // Create parasol
+  createParasol();
+
+  // Load garden
+  loadGarden();
+
+  // Events
+  window.addEventListener('resize', onResize);
+  renderer.domElement.addEventListener('pointerdown', onPointerDown);
+  renderer.domElement.addEventListener('pointermove', onPointerMove);
+  renderer.domElement.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('keydown', onKeyDown);
+
+  // UI
+  setupUI();
+
+  // Initial sun
+  updateSun();
+
+  // Render loop
+  animate();
+}
+
+function loadGarden() {
+  var textureLoader = new THREE.TextureLoader();
+  var texture = textureLoader.load('garden_texture.jpg', function(tex) {
+    tex.encoding = THREE.sRGBEncoding;
+    tex.flipY = true;
+  });
+
+  var objLoader = new THREE.OBJLoader();
+  objLoader.load('garden_simple.obj', function(obj) {
+    gardenModel = obj;
+    obj.traverse(function(child) {
+      if (child.isMesh) {
+        child.material = new THREE.MeshStandardMaterial({
+          map: texture,
+          roughness: 0.85,
+          metalness: 0.05
+        });
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+
+    // The scan uses Y-up which is Three.js default
+    // Center the model
+    var box = new THREE.Box3().setFromObject(obj);
+    var center = box.getCenter(new THREE.Vector3());
+    // Keep Y as is but center XZ
+    obj.position.x = -center.x;
+    obj.position.z = -center.z;
+
+    scene.add(obj);
+
+    // Position parasol slightly off-center, on the ground
+    // Ground level from scan is approx Y=-0.4
+    var groundY = box.min.y - center.y;
+    parasolGroup.position.set(1, groundY, 0);
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('ui').style.display = 'block';
+  },
+  function(xhr) {
+    if (xhr.total) {
+      var pct = Math.round(xhr.loaded / xhr.total * 100);
+      document.getElementById('loading').innerHTML =
+        '<div class="spinner"></div>Loading garden scan... ' + pct + '%';
+    }
+  },
+  function(err) {
+    document.getElementById('loading').innerHTML = 'Error loading model: ' + err;
+    console.error(err);
+  });
+}
+
+function createParasol() {
+  parasolGroup = new THREE.Group();
+
+  // Pole (offset/cantilever base)
+  var poleGeo = new THREE.CylinderGeometry(0.04, 0.05, PARASOL_H, 8);
+  var poleMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.5, metalness: 0.7 });
+  poleMesh = new THREE.Mesh(poleGeo, poleMat);
+  poleMesh.position.y = PARASOL_H / 2;
+  poleMesh.castShadow = true;
+  parasolGroup.add(poleMesh);
+
+  // Cantilever arm (horizontal)
+  var armGeo = new THREE.CylinderGeometry(0.03, 0.03, OFFSET, 8);
+  var armMesh = new THREE.Mesh(armGeo, poleMat);
+  armMesh.rotation.z = Math.PI / 2;
+  armMesh.position.set(OFFSET / 2, PARASOL_H - 0.05, 0);
+  armMesh.castShadow = true;
+  parasolGroup.add(armMesh);
+
+  // Canopy pivot (for tilt)
+  var canopyPivot = new THREE.Group();
+  canopyPivot.position.set(OFFSET, PARASOL_H, 0);
+  parasolGroup.add(canopyPivot);
+  parasolGroup.canopyPivot = canopyPivot;
+
+  // Canopy
+  var canopyGeo = new THREE.BoxGeometry(PARASOL_W, 0.03, PARASOL_D);
+  var canopyMat = new THREE.MeshStandardMaterial({
+    color: 0xc8a060,
+    roughness: 0.8,
+    metalness: 0.0,
+    side: THREE.DoubleSide
+  });
+  canopyMesh = new THREE.Mesh(canopyGeo, canopyMat);
+  canopyMesh.castShadow = true;
+  canopyMesh.receiveShadow = false;
+  canopyPivot.add(canopyMesh);
+
+  // Canopy frame ribs
+  var ribMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.5, metalness: 0.6 });
+  for (var i = -1; i <= 1; i += 2) {
+    var rib = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, PARASOL_D, 6), ribMat);
+    rib.rotation.x = Math.PI / 2;
+    rib.position.set(i * PARASOL_W * 0.4, -0.03, 0);
+    rib.castShadow = true;
+    canopyPivot.add(rib);
+  }
+  for (var j = -1; j <= 1; j += 2) {
+    var rib2 = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, PARASOL_W, 6), ribMat);
+    rib2.position.set(0, -0.03, j * PARASOL_D * 0.4);
+    rib2.castShadow = true;
+    canopyPivot.add(rib2);
+  }
+
+  // Base weight
+  var baseGeo = new THREE.CylinderGeometry(0.3, 0.35, 0.1, 16);
+  var baseMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.9, metalness: 0.1 });
+  var baseMesh = new THREE.Mesh(baseGeo, baseMat);
+  baseMesh.position.y = 0.05;
+  baseMesh.castShadow = true;
+  baseMesh.receiveShadow = true;
+  parasolGroup.add(baseMesh);
+
+  // Tag for raycasting
+  parasolGroup.traverse(function(c) { c.userData.isParasol = true; });
+
+  scene.add(parasolGroup);
+}
+
+function updateSun() {
+  var timeSlider = document.getElementById('timeSlider');
+  var monthSelect = document.getElementById('monthSelect');
+  var hour = parseFloat(timeSlider.value);
+  var month = parseInt(monthSelect.value);
+  var day = 21; // use 21st of each month
+
+  var sun = solarPosition(LAT, LON, month, day, hour);
+
+  // Update display
+  var h = Math.floor(hour);
+  var m = Math.round((hour - h) * 60);
+  document.getElementById('timeVal').textContent = h + ':' + (m < 10 ? '0' : '') + m;
+
+  var infoEl = document.getElementById('sunInfo');
+  if (sun.altitude <= 0) {
+    infoEl.innerHTML = '<span class="below">Sun is below horizon</span><br>Altitude: ' +
+      sun.altitude.toFixed(1) + '&deg; &middot; Azimuth: ' + sun.azimuth.toFixed(1) + '&deg;';
+    sunLight.intensity = 0;
+    ambientLight.intensity = 0.15;
+    scene.background.set(0x1a1a2e);
+  } else {
+    infoEl.innerHTML = 'Altitude: ' + sun.altitude.toFixed(1) + '&deg; &middot; Azimuth: ' +
+      sun.azimuth.toFixed(1) + '&deg;<br>Declination: ' + sun.declination.toFixed(1) + '&deg;';
+
+    // Intensity based on altitude
+    var altFactor = Math.sin(sun.altitude * Math.PI / 180);
+    sunLight.intensity = 0.6 + altFactor * 0.8;
+    ambientLight.intensity = 0.3 + altFactor * 0.3;
+
+    // Sun color — warmer near horizon
+    var warmth = 1 - altFactor;
+    var r = 1.0;
+    var g = 1.0 - warmth * 0.2;
+    var b = 0.9 - warmth * 0.4;
+    sunLight.color.setRGB(r, g, b);
+
+    // Sky color
+    var skyR = 0.4 + altFactor * 0.13;
+    var skyG = 0.6 + altFactor * 0.2;
+    var skyB = 0.8 + altFactor * 0.1;
+    scene.background.setRGB(skyR, skyG, skyB);
+  }
+
+  // Position sun light
+  // Azimuth: 0=North, 90=East, 180=South, 270=West
+  // In Three.js: x=East, z=South (after model centering)
+  // The Scaniverse scan has rotation 291 deg, but we'll use standard compass
+  var altRad = sun.altitude * Math.PI / 180;
+  var azRad = sun.azimuth * Math.PI / 180;
+  var dist = 15;
+  // Convert: azimuth measured from north clockwise
+  // Three.js: -z = North, +x = East
+  var sunX = dist * Math.cos(altRad) * Math.sin(azRad);
+  var sunY = dist * Math.sin(altRad);
+  var sunZ = -dist * Math.cos(altRad) * Math.cos(azRad);
+
+  sunLight.position.set(sunX, sunY, sunZ);
+  sunLight.target.position.set(0, 0, 0);
+}
+
+function setupUI() {
+  var timeSlider = document.getElementById('timeSlider');
+  var monthSelect = document.getElementById('monthSelect');
+  var rotSlider = document.getElementById('rotSlider');
+  var tiltSlider = document.getElementById('tiltSlider');
+  var shadowRes = document.getElementById('shadowRes');
+
+  timeSlider.addEventListener('input', function() { updateSun(); });
+  monthSelect.addEventListener('change', function() { updateSun(); });
+
+  rotSlider.addEventListener('input', function() {
+    var deg = parseInt(this.value);
+    document.getElementById('rotVal').textContent = deg + '°';
+    parasolGroup.rotation.y = deg * Math.PI / 180;
+  });
+
+  tiltSlider.addEventListener('input', function() {
+    var deg = parseInt(this.value);
+    document.getElementById('tiltVal').textContent = deg + '°';
+    if (parasolGroup.canopyPivot) {
+      parasolGroup.canopyPivot.rotation.z = -deg * Math.PI / 180;
+    }
+  });
+
+  shadowRes.addEventListener('input', function() {
+    var v = parseInt(this.value);
+    var size = v * 1024;
+    document.getElementById('shadowResVal').textContent = v + 'K';
+    sunLight.shadow.mapSize.width = size;
+    sunLight.shadow.mapSize.height = size;
+    if (sunLight.shadow.map) {
+      sunLight.shadow.map.dispose();
+      sunLight.shadow.map = null;
+    }
+  });
+
+  // Animate
+  document.getElementById('animateBtn').addEventListener('click', function() {
+    if (isAnimating) {
+      isAnimating = false;
+      this.textContent = '▶ Animate Day';
+      this.classList.remove('active');
+    } else {
+      isAnimating = true;
+      this.textContent = '⏸ Pause';
+      this.classList.add('active');
+    }
+  });
+
+  document.getElementById('resetTimeBtn').addEventListener('click', function() {
+    timeSlider.value = 12;
+    updateSun();
+  });
+
+  // Toggle parasol
+  document.getElementById('toggleParasol').addEventListener('click', function() {
+    parasolGroup.visible = !parasolGroup.visible;
+    this.textContent = parasolGroup.visible ? 'Hide Parasol' : 'Show Parasol';
+  });
+
+  // Camera views
+  document.getElementById('viewTop').addEventListener('click', function() {
+    camera.position.set(0, 14, 0.1);
+    if (controls) controls.target.set(0, 0, 0);
+  });
+  document.getElementById('viewSide').addEventListener('click', function() {
+    camera.position.set(0, 3, 10);
+    if (controls) controls.target.set(0, 1, 0);
+  });
+  document.getElementById('viewReset').addEventListener('click', function() {
+    camera.position.set(8, 8, 8);
+    if (controls) controls.target.set(0, 1, 0);
+  });
+}
+
+// ============================================================
+// Parasol dragging
+// ============================================================
+var dragOffset = new THREE.Vector3();
+var intersection = new THREE.Vector3();
+
+function onPointerDown(e) {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  var hits = raycaster.intersectObjects(parasolGroup.children, true);
+  if (hits.length > 0) {
+    isDragging = true;
+    if (controls) controls.enabled = false;
+    // Keep Y fixed at current parasol height
+    dragPlane.set(new THREE.Vector3(0, 1, 0), -parasolGroup.position.y);
+    if (raycaster.ray.intersectPlane(dragPlane, intersection)) {
+      dragOffset.copy(parasolGroup.position).sub(intersection);
+    }
+    renderer.domElement.style.cursor = 'grabbing';
+  }
+}
+
+function onPointerMove(e) {
+  if (!isDragging) {
+    // Hover detection
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    var hits = raycaster.intersectObjects(parasolGroup.children, true);
+    renderer.domElement.style.cursor = hits.length > 0 ? 'grab' : 'default';
+    return;
+  }
+
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  raycaster.ray.intersectPlane(dragPlane, intersection);
+  parasolGroup.position.x = intersection.x + dragOffset.x;
+  parasolGroup.position.z = intersection.z + dragOffset.z;
+}
+
+function onPointerUp() {
+  if (isDragging) {
+    isDragging = false;
+    if (controls) controls.enabled = true;
+    renderer.domElement.style.cursor = 'default';
+  }
+}
+
+function onKeyDown(e) {
+  if (e.key === 'r' || e.key === 'R') {
+    var rotSlider = document.getElementById('rotSlider');
+    var current = parseInt(rotSlider.value);
+    current = (current + 15) % 360;
+    rotSlider.value = current;
+    document.getElementById('rotVal').textContent = current + '°';
+    parasolGroup.rotation.y = current * Math.PI / 180;
+  }
+}
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// ============================================================
+// Minimal OrbitControls
+// ============================================================
+var controls;
+function setupOrbitControls() {
+  controls = {
+    enabled: true,
+    target: new THREE.Vector3(0, 1, 0),
+    minDistance: 2,
+    maxDistance: 30,
+    rotateSpeed: 0.8,
+    zoomSpeed: 1.2,
+    panSpeed: 0.5,
+    _spherical: { theta: Math.PI / 4, phi: Math.PI / 3, radius: 14 },
+    _isPanning: false,
+    _isRotating: false,
+    _panStart: new THREE.Vector2(),
+    _rotStart: new THREE.Vector2(),
+    update: function() {
+      var s = this._spherical;
+      s.phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.01, s.phi));
+      s.radius = Math.max(this.minDistance, Math.min(this.maxDistance, s.radius));
+      camera.position.x = this.target.x + s.radius * Math.sin(s.phi) * Math.sin(s.theta);
+      camera.position.y = this.target.y + s.radius * Math.cos(s.phi);
+      camera.position.z = this.target.z + s.radius * Math.sin(s.phi) * Math.cos(s.theta);
+      camera.lookAt(this.target);
+    }
+  };
+
+  // Set initial spherical from camera position
+  var dx = camera.position.x - controls.target.x;
+  var dy = camera.position.y - controls.target.y;
+  var dz = camera.position.z - controls.target.z;
+  controls._spherical.radius = Math.sqrt(dx*dx + dy*dy + dz*dz);
+  controls._spherical.phi = Math.acos(dy / controls._spherical.radius);
+  controls._spherical.theta = Math.atan2(dx, dz);
+
+  renderer.domElement.addEventListener('mousedown', function(e) {
+    if (!controls.enabled) return;
+    if (e.button === 0 && !isDragging) {
+      controls._isRotating = true;
+      controls._rotStart.set(e.clientX, e.clientY);
+    } else if (e.button === 2) {
+      controls._isPanning = true;
+      controls._panStart.set(e.clientX, e.clientY);
+    }
+  });
+
+  renderer.domElement.addEventListener('mousemove', function(e) {
+    if (!controls.enabled) return;
+    if (controls._isRotating) {
+      var dx = (e.clientX - controls._rotStart.x) / window.innerWidth;
+      var dy = (e.clientY - controls._rotStart.y) / window.innerHeight;
+      controls._spherical.theta -= dx * Math.PI * controls.rotateSpeed;
+      controls._spherical.phi += dy * Math.PI * controls.rotateSpeed;
+      controls._rotStart.set(e.clientX, e.clientY);
+    }
+    if (controls._isPanning) {
+      var dx = (e.clientX - controls._panStart.x) / window.innerWidth;
+      var dy = (e.clientY - controls._panStart.y) / window.innerHeight;
+      var right = new THREE.Vector3();
+      var up = new THREE.Vector3(0, 1, 0);
+      right.crossVectors(camera.getWorldDirection(new THREE.Vector3()), up).normalize();
+      controls.target.addScaledVector(right, -dx * controls._spherical.radius * controls.panSpeed);
+      controls.target.y += dy * controls._spherical.radius * controls.panSpeed;
+      controls._panStart.set(e.clientX, e.clientY);
+    }
+  });
+
+  window.addEventListener('mouseup', function() {
+    controls._isRotating = false;
+    controls._isPanning = false;
+  });
+
+  renderer.domElement.addEventListener('wheel', function(e) {
+    if (!controls.enabled) return;
+    e.preventDefault();
+    controls._spherical.radius *= (1 + e.deltaY * 0.001 * controls.zoomSpeed);
+  }, { passive: false });
+
+  renderer.domElement.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+}
+
+// ============================================================
+// Animation loop
+// ============================================================
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (isAnimating) {
+    var slider = document.getElementById('timeSlider');
+    var v = parseFloat(slider.value) + 0.02;
+    if (v > 21) v = 6;
+    slider.value = v;
+    updateSun();
+  }
+
+  if (controls) controls.update();
+  renderer.render(scene, camera);
+}
+</script>
+</body>
+</html>
