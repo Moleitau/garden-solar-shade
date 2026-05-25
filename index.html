@@ -164,6 +164,10 @@ select {
     <button id="viewSide">Side</button>
     <button id="viewReset">Reset</button>
   </div>
+  <div class="btn-row">
+    <button id="modelScan">Scan</button>
+    <button id="modelClean" class="active">Clean</button>
+  </div>
   <div class="control-row">
     <label>Shadows</label>
     <input type="range" id="shadowRes" min="1" max="4" step="1" value="2">
@@ -326,30 +330,30 @@ function init() {
   animate();
 }
 
+var scanModel = null, cleanModel = null;
+var currentModel = 'clean';
+var modelCenter = new THREE.Vector3();
+
 function loadGarden() {
   var loader = new THREE.GLTFLoader();
-  loader.load('garden.glb', function(gltf) {
-    gardenModel = gltf.scene;
+  var loaded = 0;
+
+  // Load clean model first (small, fast)
+  loader.load('garden_clean.glb', function(gltf) {
+    cleanModel = gltf.scene;
     gltf.scene.traverse(function(child) {
       if (child.isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
       }
     });
-
-    // The scan uses Y-up which is Three.js default
-    // Center the model
     var box = new THREE.Box3().setFromObject(gltf.scene);
-    var center = box.getCenter(new THREE.Vector3());
-    // Keep Y as is but center XZ
-    gltf.scene.position.x = -center.x;
-    gltf.scene.position.z = -center.z;
-
+    modelCenter = box.getCenter(new THREE.Vector3());
+    gltf.scene.position.x = -modelCenter.x;
+    gltf.scene.position.z = -modelCenter.z;
     scene.add(gltf.scene);
 
-    // Position parasol slightly off-center, on the ground
-    // Ground level from scan is approx Y=-0.4
-    var groundY = box.min.y - center.y;
+    var groundY = box.min.y - modelCenter.y;
     parasolGroup.position.set(1, groundY, 0);
 
     document.getElementById('loading').style.display = 'none';
@@ -359,16 +363,39 @@ function loadGarden() {
     if (xhr.total) {
       var pct = Math.round(xhr.loaded / xhr.total * 100);
       document.getElementById('loading').innerHTML =
-        '<div class="spinner"></div>Loading garden scan... ' + pct + '%';
+        '<div class="spinner"></div>Loading garden... ' + pct + '%';
     }
   },
   function(err) {
-    console.error('GLB load error:', err);
+    console.error('Clean GLB load error:', err);
     document.getElementById('loading').innerHTML =
-      'Error loading garden.glb — make sure the file is in the same folder as this HTML.<br>' +
-      '<span style="font-size:12px;color:#888">If using file://, you need a local server instead:<br>' +
-      'Run: python3 -m http.server 8000<br>Then open localhost:8000</span>';
+      'Error loading garden_clean.glb — make sure it is in the same folder.<br>' +
+      '<span style="font-size:12px;color:#888">Run: python3 -m http.server 8000</span>';
   });
+
+  // Load scan model in background
+  loader.load('garden.glb', function(gltf) {
+    scanModel = gltf.scene;
+    gltf.scene.traverse(function(child) {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    gltf.scene.position.x = -modelCenter.x;
+    gltf.scene.position.z = -modelCenter.z;
+    gltf.scene.visible = false;
+    scene.add(gltf.scene);
+  });
+}
+
+function switchModel(mode) {
+  currentModel = mode;
+  if (cleanModel) cleanModel.visible = (mode === 'clean');
+  if (scanModel) scanModel.visible = (mode === 'scan');
+  document.getElementById('modelClean').classList.toggle('active', mode === 'clean');
+  document.getElementById('modelScan').classList.toggle('active', mode === 'scan');
+}
 }
 
 function createParasol() {
@@ -590,6 +617,10 @@ function setupUI() {
     camera.position.set(8, 8, 8);
     if (controls) controls.target.set(0, 1, 0);
   });
+
+  // Model switching
+  document.getElementById('modelScan').addEventListener('click', function() { switchModel('scan'); });
+  document.getElementById('modelClean').addEventListener('click', function() { switchModel('clean'); });
 }
 
 // ============================================================
