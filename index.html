@@ -357,8 +357,11 @@ function loadGarden() {
     }
   },
   function(err) {
-    document.getElementById('loading').innerHTML = 'Error loading model: ' + err;
-    console.error(err);
+    console.error('GLB load error:', err);
+    document.getElementById('loading').innerHTML =
+      'Error loading garden.glb — make sure the file is in the same folder as this HTML.<br>' +
+      '<span style="font-size:12px;color:#888">If using file://, you need a local server instead:<br>' +
+      'Run: python3 -m http.server 8000<br>Then open localhost:8000</span>';
   });
 }
 
